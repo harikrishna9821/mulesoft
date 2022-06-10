@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:ftp="http://www.mulesoft.org/schema/mule/ftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ftp http://www.mulesoft.org/schema/mule/ftp/current/mule-ftp.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd">
+	<file:config name="File_Config" doc:name="File Config" doc:id="c2bf7108-0a40-4581-bfef-0edca8202361" >
+		<file:connection workingDir="E:\test" />
+	</file:config>
+	<file:config name="File_Config1" doc:name="File Config" doc:id="ec714f09-5926-4d5d-b51d-9edda8f6d49f" >
+		<file:connection workingDir="C:\sample\output write"/>
+	</file:config>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="2e239150-82af-45af-8c52-99b34977af48" >
+		<jms:active-mq-connection username="admin" password="admin" >
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
+	<flow name="dataprocessingFlow" doc:id="f9209347-9956-4027-a104-e15fcdd23a8c" >
+		<scheduler doc:name="Scheduler" doc:id="ff058954-f1f0-43f8-ba60-cec13554bfd7" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="10" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Logger" doc:id="f5e65ac1-4ba7-408a-8d86-cfd1819f4668" message="flow start::"/>
+		<logger level="INFO" doc:name="Logger" doc:id="00c1d50c-f877-4752-8ff9-eaa9dce66654" message="flow start::::#[payload]"/>
+		<file:read doc:name="Read" doc:id="6eb0eb02-334c-4729-b66e-cfaaf0c6bda6" config-ref="File_Config" path="C:\sample\contacts.csv"/>
+		<logger level="INFO" doc:name="Logger" doc:id="a47d4a0a-bce0-4a3a-821c-2cddf2efd872" message="read logger:::::#[payload]"/>
+		<ee:transform doc:name="Transform Message" doc:id="1845790c-c7e3-4d43-ada1-3d2c6d2f1997" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="write" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<batch:job jobName="dataprocessingBatch_Job" doc:id="8bacb9db-a6fb-4d5c-8859-b289b3f827bd" maxFailedRecords="-1" blockSize="24">
+			<batch:process-records >
+				<batch:step name="succesBatch_Step" doc:id="94ef6053-2875-46bc-90c4-42344f8aa2d6">
+					<logger level="INFO" doc:name="Logger" doc:id="d84de0bf-641e-41cf-b091-14044f0d4a35" message="inside batch step::::#[payload123]"/>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="d2f1af25-95e1-4246-a741-4c211d665b51" size="24">
+						<logger level="INFO" doc:name="Logger" doc:id="92cfed15-90fe-455b-b282-a2c8d909e86a" message="inside batch aggregator:::::::#[payload]"/>
+						<ee:transform doc:name="Transform Message" doc:id="61a4de35-4ddd-4e54-a851-3d11d1c37174" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<file:write doc:name="Write" doc:id="af279912-4268-4806-b5bf-f7ba2843c27b" config-ref="File_Config1" path="C:\sample\output write\contacts12345.csv"/>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="failureBatch_Step" doc:id="ca5e0e67-d91a-45e8-bb35-9c4a3fd0e35e" acceptPolicy="ONLY_FAILURES">
+					<logger level="INFO" doc:name="Logger" doc:id="dd2d36c5-af33-46a4-885c-881a39da4565" message="failure batch step::::::#[payload]"/>
+					<batch:aggregator doc:name="Bfailure atch Aggregator" doc:id="0301e8ba-fea2-4427-a6da-44395e999160" size="24">
+						<logger level="INFO" doc:name="Logger" doc:id="111c6934-2e7b-47b1-8ddb-0320a68d77c6" message="inside batch aggregator::::#[payload]"/>
+						<file:write doc:name="Write" doc:id="1f349201-ed9b-40d4-a044-308a83997790" config-ref="File_Config" path="failurerecords.csv"/>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="Logger" doc:id="dffafbc3-fd2d-4a9a-8412-2a0084cf9534" message="on complete flow::::#[payload]"/>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+</mule>
